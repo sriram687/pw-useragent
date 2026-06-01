@@ -1,0 +1,15 @@
+{
+  "name": "pw-sw-useragent-repro",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "node repro.js"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "playwright": "^1.60.0"
+  }
+}
