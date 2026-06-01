@@ -15,24 +15,25 @@ const server = http.createServer((req, res) => {
 
   const pathToExtension = path.join(__dirname, 'my-extension');
 
+  const CUSTOM_UA = 'MyTestAgent/1.0';
+
+  // ── Set userAgent at context creation (the correct public API) ────────────────
   const context = await chromium.launchPersistentContext('', {
     channel: 'chromium',
+    userAgent: CUSTOM_UA,
     args: [
       `--disable-extensions-except=${pathToExtension}`,
       `--load-extension=${pathToExtension}`,
     ],
-    headless: false, // extensions require non-headless OR chromium channel
+    headless: false,
   });
+
+  console.log(`✅ Context launched with userAgent: '${CUSTOM_UA}'`);
 
   // ── Wait for the extension service worker ────────────────────────────────────
   let [sw] = context.serviceWorkers();
   if (!sw) sw = await context.waitForEvent('serviceworker');
   console.log('✅ Service worker registered:', sw.url());
-
-  // ── Apply user-agent override ─────────────────────────────────────────────────
-  const CUSTOM_UA = 'MyTestAgent/1.0';
-  await context.setUserAgent(CUSTOM_UA);
-  console.log(`✅ setUserAgent('${CUSTOM_UA}') called`);
 
   // ── Ask the SW to fetch and return its User-Agent header ──────────────────────
   const uaSentBySW = await sw.evaluate(async (url) => {
@@ -41,10 +42,19 @@ const server = http.createServer((req, res) => {
     return headers['user-agent'];
   }, echoUrl);
 
-  console.log('\n─── Result ───────────────────────────────────');
-  console.log('UA sent by service worker :', uaSentBySW);
-  console.log('Expected                  :', CUSTOM_UA);
-  console.log('Match?                    :', uaSentBySW === CUSTOM_UA ? '✅ YES' : '❌ NO (bug)');
+  // ── Also verify a regular page DOES get the override correctly ────────────────
+  const page = await context.newPage();
+  const uaSentByPage = await page.evaluate(async (url) => {
+    const res = await fetch(url);
+    const headers = await res.json();
+    return headers['user-agent'];
+  }, echoUrl);
+  await page.close();
+
+  console.log('\n─── Result ─────────────────────────────────────────────────');
+  console.log('UA set on context         :', CUSTOM_UA);
+  console.log('UA sent by regular page   :', uaSentByPage, uaSentByPage === CUSTOM_UA ? '✅' : '❌');
+  console.log('UA sent by service worker :', uaSentBySW,   uaSentBySW  === CUSTOM_UA ? '✅' : '❌ (bug)');
 
   await context.close();
   server.close();
